@@ -22,6 +22,22 @@ from deepface.basemodels import VGGFace, OpenFace, Facenet, FbDeepFace, DeepID
 from deepface.extendedmodels import Age, Gender, Race, Emotion
 from deepface.commons import functions, realtime, distance as dst
 
+def make_dict(dataset_path):
+	dic = {}
+	os.chdir(dataset_path)   #Aqui entramos no diretório do dataset
+	class_folders = os.listdir('.') #Pegamos os strings referente aos diretórios referentes a cada classe
+	for class_folder in class_folders: #Loop para varrer cada diretório
+		i = 1 #Variável auxiliar para nomear as imagens
+		os.chdir(class_folder) #Entramos no diretório de uma classe
+		images = os.listdir('.') #Pegamos os strings de cada arquivo de imagem
+		for image in images: #Loop para varrer as imagens
+			#os.rename(image, class_folder+'.{}'.format(i)+'.jpg') #Renomeamos cada imagem com o nome no formato que queremos
+			dic['{}.{}'.format(class_folder, i)] = dataset_path+ chr(92) +class_folder+chr(92)+image
+			i = i+1 #Atualizamos a variável
+		os.chdir('..') #Após renomear todas as imagens em um diretório, saimos dele para ir ao próximo
+	os.chdir('..')
+	return dic
+
 def save_hash(img_dict, model_name = 'Ensemble', model = None, enforce_detection = True):
 
 	tic = time.time()
@@ -303,55 +319,28 @@ def f1_calculation(verif_df):
 
 #------------------------------
 	
-def compare_img_df(img_path, img_label, dic, df):
+def compare_img_df(img_path, img_label,dic,  df):
 
 	img_dic = {img_label: img_path}
 
-	img_dic.update(dic)
 
-	df = save_hash(img_dic)
+	df_upload = save_hash(img_dic)
+	df_upload.append(df, ignore_index=False)
+	frames = [df_upload, df]
+	df = pd.concat(frames) 	
 
 	metrics = metrics_dataframe(df, one_compair = True)
 	
-	ensemble = ensemble_dataframe(metrics)	
+	ensemble = ensemble_dataframe(metrics)
+	ensemble = ensemble[ensemble['Verified'] == 'true']	
+	index = np.argmax(ensemble["Score"])
+	names = list(ensemble.index)[index]
+	print(names)
+	names = names.split("-")
+	names = names[0].split('.')
+	print(names)
 
-	image = cv2.imread(img_path)
-				
-	image = np.array(image)[:, :, [2, 1, 0]]
-
-	plt.imshow(image)
-
-	plt.title(img_label)
-
-	plt.show()
-			
-
-	for i in ensemble.index:
-		
-		if ensemble.loc[i, 'Verified'] == 'true':
-			
-			names = i.split('-')
-
-			names = names[0].split('.') + names[1].split('.')
-
-			for j in list(dic.keys()):
-				
-				if j == names[0]:
-					
-					image = cv2.imread(dic[j])
-				
-					image = np.array(image)[:, :, [2, 1, 0]]
-
-					plt.imshow(image)
-
-					plt.title(j)
-
-					plt.show()
-			
-			break
-		break
-	
-	return ensemble		
+	return ensemble, names[0]		
 					
 	
 #------------------------------
@@ -1178,4 +1167,3 @@ def allocateMemory():
 functions.initializeFolder()
 
 #---------------------------
-
