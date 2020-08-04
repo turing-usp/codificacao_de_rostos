@@ -15,6 +15,7 @@ from keras import backend as K
 import keras
 import tensorflow as tf
 import pickle
+import matplotlib.pyplot as plt
 
 from deepface import DeepFace
 from deepface.basemodels import VGGFace, OpenFace, Facenet, FbDeepFace, DeepID
@@ -25,7 +26,7 @@ def save_hash(img_dict, model_name = 'Ensemble', model = None, enforce_detection
 
 	tic = time.time()
 
-	img_list = list(img_dict.values())
+	img_list = list(img_dict.keys())
 
 	if model_name == 'Ensemble':
 		print("Ensemble learning enabled")
@@ -64,10 +65,15 @@ def save_hash(img_dict, model_name = 'Ensemble', model = None, enforce_detection
 		df = df.astype(object)
 
 		representation = []
+
+		erro_keys = []
 		
 		#for instance in img_list:
 		for index in pbar:
-			img1_path = img_list[index]
+
+			erro = False
+
+			img1_key = img_list[index]
 			
 			representation.clear()
 			
@@ -84,22 +90,28 @@ def save_hash(img_dict, model_name = 'Ensemble', model = None, enforce_detection
 					input_shape = input_shape[1:3]
 				
 				try:
-					img1 = functions.detectFace(img1_path, input_shape, enforce_detection = enforce_detection)
+					img1 = functions.detectFace(img_dict[img1_key], input_shape, enforce_detection = enforce_detection)
 				except:
-					print("Deu merda com essa foto: {}".format(img1_path))
+					erro = True
+					erro_keys.append(img1_key)
+					break
 
 				img1_representation = custom_model.predict(img1)[0,:]
 
 				representation.append(img1_representation)
 
+			if erro:
+				continue
 			
 			df.loc[list(img_dict.keys())[index]] = representation
 			
+		for i in erro_keys:
+			df.drop(index = i, inplace = True)				
 
 		return df
 	#------------------------------
 
-def metrics_dataframe(img_df):
+def metrics_dataframe(img_df, one_compair = False):
 	
 	cosine_distance = []
 	euclidean_distance = []
@@ -123,40 +135,79 @@ def metrics_dataframe(img_df):
 
 	metrics_df = metrics_df.astype(object)
 
-	people_pbar = tqdm(range(0, len(img_df.index)), desc = 'Avaliando cada pessoa em relação à todas as outras!')
+	if one_compair:
 
-	for index in people_pbar:
-		
-		real_index = img_df.index[index]
+		people_pbar = tqdm(range(1, len(img_df.index)), desc = 'Avaliando a primeira pessoa em relação à todas as outras')
 
-		for jndex in people_pbar:
+		for index in people_pbar:
 
-			real_jndex = img_df.index[jndex]
+			image_index = img_df.index[0]
+			real_index = img_df.index[index]
 
 			cosine_distance.clear()
 			euclidean_distance.clear()
 			l2_distance.clear()
 			distances.clear()
-			
+
 			for model in img_df.columns:
 			
 				#Cosine:
-				cosine_distance.append(dst.findCosineDistance(img_df.at[real_index, model], img_df.at[real_jndex, model]))
+				cosine_distance.append(dst.findCosineDistance(img_df.at[image_index, model], img_df.at[real_index, model]))
 
 				#Euclidean:
-				euclidean_distance.append(dst.findEuclideanDistance(img_df.at[real_index, model], img_df.at[real_jndex, model]))
+				euclidean_distance.append(dst.findEuclideanDistance(img_df.at[image_index, model], img_df.at[real_index, model]))
 
 				#L2:
-				l2_distance.append(dst.findEuclideanDistance(dst.l2_normalize(img_df.at[real_index, model]), 										     dst.l2_normalize(img_df.at[real_jndex, model])))
+				l2_distance.append(dst.findEuclideanDistance(dst.l2_normalize(img_df.at[image_index, model]), 										     dst.l2_normalize(img_df.at[real_index, model])))
 
 			for i in range(0, len(img_df.columns)):
 				distances.append(cosine_distance[i])
 				distances.append(euclidean_distance[i])
 				distances.append(l2_distance[i])
 
-			string = real_index + '-' + real_jndex
+			string = real_index + '-' + image_index
 
 			metrics_df.loc[string] = distances
+
+
+	else:
+		people_pbar = tqdm(range(0, len(img_df.index)), desc = 'Avaliando cada pessoa em relação à todas as outras')
+
+		for index in people_pbar:
+			
+			real_index = img_df.index[index]
+
+			for jndex in people_pbar:
+
+				real_jndex = img_df.index[jndex]
+
+				cosine_distance.clear()
+				euclidean_distance.clear()
+				l2_distance.clear()
+				distances.clear()
+				
+				for model in img_df.columns:
+				
+					#Cosine:
+					cosine_distance.append(dst.findCosineDistance(img_df.at[real_index, model], img_df.at[real_jndex, model]))
+
+					#Euclidean:
+					euclidean_distance.append(dst.findEuclideanDistance(img_df.at[real_index, model], img_df.at[real_jndex,
+model]))
+
+					#L2:
+					l2_distance.append(dst.findEuclideanDistance(dst.l2_normalize(img_df.at[real_index, model]), 										     dst.l2_normalize(img_df.at[real_jndex, model])))
+
+				for i in range(0, len(img_df.columns)):
+					distances.append(cosine_distance[i])
+					distances.append(euclidean_distance[i])
+					distances.append(l2_distance[i])
+
+				string = real_index + '-' + real_jndex
+
+				metrics_df.loc[string] = distances
+	
+	metrics_df.dropna(inplace = True)
 
 	return metrics_df
 
@@ -167,6 +218,8 @@ def ensemble_dataframe(metrics_df):
 	import lightgbm as lgb #lightgbm==2.3.1 
 
 	columns_names = ['Verified', 'Reality', 'Score']
+
+	metrics_df = metrics_df.drop('Euclidean with OpenFace', axis = 1)
 
 	verification_df = pd.DataFrame(columns = columns_names, index = metrics_df.index)
 	
@@ -238,9 +291,9 @@ def f1_calculation(verif_df):
 
 	accuracy = (TP+TN)/(TP+TN+FP+FN)
 
-	recall = TP/(TP+FP)
+	recall = TN/(TN+FN)
 
-	precision = TN/(TN+FN)
+	precision = TP/(TP+FP)
 
 	f1 = 2*(recall*precision)/(recall+precision)
 
@@ -248,6 +301,59 @@ def f1_calculation(verif_df):
 
 	return f1_df
 
+#------------------------------
+	
+def compare_img_df(img_path, img_label, dic, df):
+
+	img_dic = {img_label: img_path}
+
+	img_dic.update(dic)
+
+	df = save_hash(img_dic)
+
+	metrics = metrics_dataframe(df, one_compair = True)
+	
+	ensemble = ensemble_dataframe(metrics)	
+
+	image = cv2.imread(img_path)
+				
+	image = np.array(image)[:, :, [2, 1, 0]]
+
+	plt.imshow(image)
+
+	plt.title(img_label)
+
+	plt.show()
+			
+
+	for i in ensemble.index:
+		
+		if ensemble.loc[i, 'Verified'] == 'true':
+			
+			names = i.split('-')
+
+			names = names[0].split('.') + names[1].split('.')
+
+			for j in list(dic.keys()):
+				
+				if j == names[0]:
+					
+					image = cv2.imread(dic[j])
+				
+					image = np.array(image)[:, :, [2, 1, 0]]
+
+					plt.imshow(image)
+
+					plt.title(j)
+
+					plt.show()
+			
+			break
+		break
+	
+	return ensemble		
+					
+	
 #------------------------------
 
 def verify(img1_path, img2_path=''
