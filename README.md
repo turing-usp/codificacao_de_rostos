@@ -10,11 +10,6 @@ Projeto da área de visão computacional que visa o estudo de processos análogo
 [Rodrigo Fill](https://github.com/rodrigofill)
 [Victor Jinsi]()
 
-## :seedling: Proposta
-O banco BTG Pactual nos propôs um projeto para solucionar um problema específico de comunicação entre bancos. 
-É de interesse dos bancos saber informações sobre seus novos clientes, como se ele tem um mal histórico com outros bancos.
-Para trocar informações entre bancos é necessário que essa informação seja codificada de maneira que a identidade do usuário se mantenha anônima. Ou seja, em cima da informação terá de haver algum tipo de codificação, para que se houver interceptação na comunicação, as informações se manterem privadas.
-Isso já é feito com informações como CPF ou RG (na forma de uma codificação hash), mas o BTG vê interesse em fazer tal codificação com o rosto do usuário, então esse é o nosso desafio.
 
 ## :flashlight:	Escopo
 O projeto visa criar um sistema que recebe uma foto do usuário e codifica essa informação com uma operação que não permita a reconstrução da imagem.
