@@ -1,2 +1,4 @@
 .ipynb_checkpoints
 *.py.swp
+.vscode
+__pycache__
